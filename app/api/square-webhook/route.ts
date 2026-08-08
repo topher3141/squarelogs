@@ -68,8 +68,8 @@ export async function POST(request: NextRequest) {
     const amount = payment.amount_money?.amount;
     const currency = payment.amount_money?.currency;
 
-    if (!Number.isInteger(amount) || amount! < 0 || !currency) {
-      throw new Error(`Payment ${payment.id} is missing valid amount_money.`);
+if (typeof amount !== "number" || !Number.isInteger(amount) || amount < 0 || !currency) {
+  throw new Error(`Payment ${payment.id} is missing valid amount_money.`);
     }
 
     const order = await retrieveSquareOrder(payment.order_id);
