@@ -67,8 +67,12 @@ export async function paymentToProtect(payment: SquarePayment) {
 
   const transaction: ProtectTransaction = {
     type: "sale",
-    externalId: payment.id,
-    amount,
+    externalId:
+  payment.receipt_number ||
+  payment.id,
+
+amount:
+  amount / 100,
     currency: currency.toUpperCase(),
     lineItems,
     location: {
