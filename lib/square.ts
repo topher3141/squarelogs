@@ -14,28 +14,32 @@ export type SquarePayment = {
   created_at?: string;
   updated_at?: string;
   source_type?: string;
+  receipt_number?: string;
+
   amount_money?: SquareMoney;
+
   card_details?: {
     card?: {
       card_brand?: string;
       last_4?: string;
     };
   };
-  cash_details?: unknown;
+
   external_details?: {
     type?: string;
     source?: string;
   };
+
   device_details?: {
     device_id?: string;
     device_name?: string;
     device_installation_id?: string;
   };
+
   application_details?: {
     square_product?: string;
   };
 };
-
 export type SquareOrder = {
   id?: string;
   location_id?: string;
