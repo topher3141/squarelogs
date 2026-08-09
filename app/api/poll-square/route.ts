@@ -38,12 +38,15 @@ export async function GET(request: NextRequest) {
       now.toISOString()
     );
 
-    const completed = payments.filter(
-      (payment) =>
-        payment.status === "COMPLETED" &&
-        payment.id &&
-        payment.order_id
-    );
+const completed =
+  payments.filter(
+    (payment) =>
+      payment.status === "COMPLETED" &&
+      payment.id &&
+      payment.order_id &&
+      payment.application_details?.square_product === "RETAIL" &&
+      payment.device_details?.device_id
+  );
 
     const results: Array<Record<string, unknown>> = [];
 
