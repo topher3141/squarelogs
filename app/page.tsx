@@ -62,6 +62,19 @@ export default function Home() {
   const [payment, setPayment] = useState("");
   const [selected, setSelected] =
     useState<ReceiptRecord | null>(null);
+  const [loggingOut, setLoggingOut] = useState(false);
+
+  async function handleLogout() {
+    setLoggingOut(true);
+
+    try {
+      await fetch("/api/auth/logout", {
+        method: "POST",
+      });
+    } finally {
+      window.location.href = "/login";
+    }
+  }
 
   useEffect(() => {
     const timer = setTimeout(async () => {
@@ -136,9 +149,19 @@ export default function Home() {
           </p>
         </div>
 
-        <div className="status">
-          <span />
-          Square + Protect
+        <div className="headerActions">
+          <div className="status">
+            <span />
+            Square + Protect
+          </div>
+
+          <button
+            className="logoutButton"
+            onClick={handleLogout}
+            disabled={loggingOut}
+          >
+            {loggingOut ? "Logging Out…" : "Log Out"}
+          </button>
         </div>
       </header>
 
