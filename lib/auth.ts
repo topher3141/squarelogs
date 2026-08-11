@@ -16,7 +16,7 @@ function base64UrlEncode(bytes: Uint8Array): string {
     .replace(/=+$/g, "");
 }
 
-function base64UrlDecode(value: string): Uint8Array {
+function base64UrlDecode(value: string): ArrayBuffer {
   const padded =
     value.replace(/-/g, "+").replace(/_/g, "/") +
     "=".repeat((4 - (value.length % 4)) % 4);
@@ -28,13 +28,25 @@ function base64UrlDecode(value: string): Uint8Array {
     bytes[i] = binary.charCodeAt(i);
   }
 
-  return bytes;
+  return bytes.buffer.slice(
+    bytes.byteOffset,
+    bytes.byteOffset + bytes.byteLength
+  ) as ArrayBuffer;
+}
+
+function textBuffer(value: string): ArrayBuffer {
+  const bytes = encoder.encode(value);
+
+  return bytes.buffer.slice(
+    bytes.byteOffset,
+    bytes.byteOffset + bytes.byteLength
+  ) as ArrayBuffer;
 }
 
 async function signingKey(password: string) {
   return crypto.subtle.importKey(
     "raw",
-    encoder.encode(password),
+    textBuffer(password),
     {
       name: "HMAC",
       hash: "SHA-256",
@@ -55,7 +67,7 @@ export async function createSessionToken(
   });
 
   const payloadEncoded = base64UrlEncode(
-    encoder.encode(payload)
+    new Uint8Array(textBuffer(payload))
   );
 
   const key = await signingKey(password);
@@ -63,7 +75,7 @@ export async function createSessionToken(
   const signature = await crypto.subtle.sign(
     "HMAC",
     key,
-    encoder.encode(payloadEncoded)
+    textBuffer(payloadEncoded)
   );
 
   return `${payloadEncoded}.${base64UrlEncode(
@@ -94,18 +106,17 @@ export async function verifySessionToken(
         "HMAC",
         key,
         base64UrlDecode(signatureEncoded),
-        encoder.encode(payloadEncoded)
+        textBuffer(payloadEncoded)
       );
 
     if (!validSignature) {
       return false;
     }
 
-    const payloadBytes =
-      base64UrlDecode(payloadEncoded);
-
     const payload = JSON.parse(
-      new TextDecoder().decode(payloadBytes)
+      new TextDecoder().decode(
+        base64UrlDecode(payloadEncoded)
+      )
     ) as {
       role?: string;
       exp?: number;
@@ -129,11 +140,11 @@ export async function passwordMatches(
   const [a, b] = await Promise.all([
     crypto.subtle.digest(
       "SHA-256",
-      encoder.encode(supplied)
+      textBuffer(supplied)
     ),
     crypto.subtle.digest(
       "SHA-256",
-      encoder.encode(expected)
+      textBuffer(expected)
     ),
   ]);
 
