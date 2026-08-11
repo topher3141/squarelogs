@@ -3,6 +3,8 @@ import { config } from "../../../lib/config";
 import { wasProcessed, markProcessed } from "../../../lib/redis";
 import { listRecentSquarePayments } from "../../../lib/square";
 import { paymentToProtect } from "../../../lib/transaction";
+import { buildReceiptRecord } from "@/lib/receipt-builder";
+import { saveReceiptRecord } from "@/lib/receipts";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -11,8 +13,8 @@ export const maxDuration = 60;
 function authorized(request: NextRequest): boolean {
   const secret = config.cronSecret();
 
-  // If no secret is configured, allow calls. This is convenient for initial testing,
-  // but setting CRON_SECRET in production is strongly recommended.
+  // If no secret is configured, allow calls.
+  // This is convenient for initial testing.
   if (!secret) return true;
 
   return request.headers.get("authorization") === `Bearer ${secret}`;
@@ -21,15 +23,20 @@ function authorized(request: NextRequest): boolean {
 export async function GET(request: NextRequest) {
   if (!authorized(request)) {
     return NextResponse.json(
-      { ok: false, error: "unauthorized" },
-      { status: 401 }
+      {
+        ok: false,
+        error: "unauthorized",
+      },
+      {
+        status: 401,
+      }
     );
   }
 
   const now = new Date();
 
-  // Look back five minutes so we don't miss payments that take a few seconds
-  // to become visible via Square's ListPayments API.
+  // Look back five minutes so we don't miss payments
+  // that take a few seconds to become visible in Square.
   const begin = new Date(now.getTime() - 5 * 60 * 1000);
 
   try {
@@ -38,15 +45,16 @@ export async function GET(request: NextRequest) {
       now.toISOString()
     );
 
-const completed =
-  payments.filter(
-    (payment) =>
-      payment.status === "COMPLETED" &&
-      payment.id &&
-      payment.order_id &&
-      payment.application_details?.square_product === "RETAIL" &&
-      payment.device_details?.device_id
-  );
+    // Only physical retail-register transactions.
+    // This excludes invoices, ecommerce, payment links, etc.
+    const completed = payments.filter(
+      (payment) =>
+        payment.status === "COMPLETED" &&
+        payment.id &&
+        payment.order_id &&
+        payment.application_details?.square_product === "RETAIL" &&
+        payment.device_details?.device_id
+    );
 
     const results: Array<Record<string, unknown>> = [];
 
@@ -59,25 +67,43 @@ const completed =
           status: "skipped",
           reason: "already processed",
         });
+
         continue;
       }
 
       try {
-        const { transaction, protectResult } =
-          await paymentToProtect(payment);
+        const {
+          transaction,
+          protectResult,
+          order,
+        } = await paymentToProtect(payment);
 
         const eventId =
           protectResult &&
           typeof protectResult === "object" &&
           "eventId" in protectResult
-            ? String((protectResult as { eventId?: unknown }).eventId ?? "")
+            ? String(
+                (protectResult as { eventId?: unknown }).eventId ?? ""
+              )
             : "";
 
+        // Save searchable receipt data for the portal.
+        const receiptRecord = buildReceiptRecord({
+          payment,
+          order,
+          protectEventId: eventId,
+        });
+
+        await saveReceiptRecord(receiptRecord);
+
+        // Only mark processed after both Protect and receipt storage succeed.
         await markProcessed(paymentId, eventId);
 
         results.push({
           paymentId,
+          receiptNumber: payment.receipt_number ?? null,
           status: "sent",
+          receiptSaved: true,
           amount: transaction.amount,
           paymentType: transaction.paymentTypes[0],
           lineItems: transaction.lineItems.length,
@@ -87,8 +113,10 @@ const completed =
 
         console.info(
           JSON.stringify({
-            message: "Polled Square sale sent to UniFi Protect",
+            message:
+              "Polled Square sale sent to UniFi Protect and saved to receipt portal",
             paymentId,
+            receiptNumber: payment.receipt_number,
             device: payment.device_details?.device_name,
             protectResult,
           })
@@ -131,7 +159,9 @@ const completed =
             ? error.message
             : "unknown error",
       },
-      { status: 500 }
+      {
+        status: 500,
+      }
     );
   }
 }
