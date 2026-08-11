@@ -60,11 +60,11 @@ export function buildReceiptRecord(args: {
   }
 
   const footageStart = Math.max(0, timestamp - 20_000);
-  const footageUrl =
-    `https://unifi.ui.com/consoles/${encodeURIComponent(consoleId)}` +
-    `/protect/timelapse/${encodeURIComponent(cameraId)}` +
-    `?start=${footageStart}`;
-
+const footageUrl =
+  `https://unifi.ui.com/consoles/${consoleId}` +
+  `/protect/timelapse/${cameraId}` +
+  `?start=${footageStart}`;
+  
   return {
     paymentId: payment.id,
     orderId: payment.order_id,
