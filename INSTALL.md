@@ -1,47 +1,93 @@
-# Receipt Portal — same squarelogs project
+# Admin Login Patch
 
-No new GitHub repo, Vercel project, secrets, API keys, or environment variables are required.
+This protects the receipt portal without touching the working Square -> UniFi poller.
 
-## Add
-- `lib/receipts.ts`
-- `lib/receipt-builder.ts`
-- `app/api/receipts/route.ts`
+## 1. Add ONE Vercel environment variable
 
-## Replace
-- `app/page.tsx`
-- `app/globals.css`
+In Vercel:
 
-If either existing file contains content you still need, merge it instead of overwriting it.
+Project -> Settings -> Environment Variables
 
-## Make one tiny edit
-Open `app/api/poll-square/route.ts` and follow `PATCH-poll-square.md`.
+Add:
 
-Do not replace the whole poller. This keeps the working Square → UniFi integration intact.
+ADMIN_PASSWORD
 
-## Existing Vercel variables reused
-- `UPSTASH_REDIS_REST_URL`
-- `UPSTASH_REDIS_REST_TOKEN`
-- `UNIFI_CONSOLE_ID`
-- `UNIFI_CAMERA_ID`
-- your existing Square credentials/settings
+Set it to a strong password.
 
-## Redis isolation
-The portal uses new key names inside the same Upstash database:
-- existing dedupe: `square-unifi:processed:*`
-- receipts: `square-unifi:receipt:*`
-- receipt index: `square-unifi:receipts:by-time`
+Apply it to Production (and Preview too if you want preview deployments protected).
 
-It does not overwrite the existing dedupe keys.
+You do NOT need to add an ADMIN_USERNAME variable.
+The username is always:
 
-## Deploy/test
-1. Copy the files into the existing GitHub repo.
-2. Make the small poller edit.
-3. Commit/push.
-4. Let the existing Vercel project redeploy.
-5. Make a physical-register test sale.
-6. Wait for the poller to process it.
-7. Open the root site URL.
-8. The receipt should appear and `View Footage` should open Protect about 20 seconds before the transaction.
+admin
 
-## Important
-Only transactions processed after this patch is deployed will be stored in the new receipt index. Historical backfill can be added separately later.
+After adding the variable, redeploy the project.
+
+## 2. Add these files
+
+Copy these files to the matching paths in your GitHub repo:
+
+- middleware.ts
+- lib/auth.ts
+- app/login/page.tsx
+- app/api/auth/login/route.ts
+- app/api/auth/logout/route.ts
+
+## 3. Add the login styles
+
+Open:
+
+AUTH-STYLES.txt
+
+Copy everything in it to the BOTTOM of your existing:
+
+app/globals.css
+
+Do not replace the existing stylesheet.
+
+## 4. Push to GitHub
+
+After Vercel deploys, opening the site root should redirect to:
+
+/login
+
+Login with:
+
+Username: admin
+Password: whatever you put in ADMIN_PASSWORD
+
+## What is protected
+
+Protected:
+- /
+- /api/receipts
+- anything under /api/receipts/*
+
+Not changed / not blocked:
+- /api/poll-square
+- /api/health
+- /api/auth/login
+- /api/auth/logout
+
+So your existing Vercel cron continues running normally.
+
+## Session security
+
+The login creates a signed HMAC session cookie that:
+
+- is HttpOnly
+- is Secure in production
+- uses SameSite=Lax
+- expires after 12 hours
+- cannot be forged without ADMIN_PASSWORD
+
+The actual admin password is never stored in the browser.
+
+## Logging out
+
+A logout API route is included at:
+
+POST /api/auth/logout
+
+The current portal does not yet display a Logout button. Once login is confirmed working,
+we can add a small Logout button to the receipt portal header.
