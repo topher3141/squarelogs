@@ -88,5 +88,6 @@ amount:
   return {
     transaction,
     protectResult,
+    order,
   };
 }
